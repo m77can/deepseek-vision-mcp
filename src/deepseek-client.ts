@@ -203,9 +203,7 @@ export class DeepSeekClient {
 
     const powHeader = await this.createAndSolvePow('/api/v0/chat/completion');
 
-    // 使用 Node.js https 模块，通过 TLS ciphers 模拟 Chrome 指纹
-    const https = await import('node:https');
-
+    // 构建请求
     const body = JSON.stringify({
       chat_session_id: sessionId,
       parent_message_id: null,
@@ -236,59 +234,35 @@ export class DeepSeekClient {
     if (powHeader) reqHeaders['x-ds-pow-response'] = powHeader;
     if (this.smidV2) reqHeaders['cookie'] = `smidV2=${this.smidV2}`;
 
-    console.error('[DSClient] 🤖 Vision 分析中（纯 JS）...');
+    console.error('[DSClient] 🤖 Vision 分析中...');
 
-    const result = await new Promise<string>((resolve, reject) => {
-      const req = https.request(
-        'https://chat.deepseek.com/api/v0/chat/completion',
-        {
-          method: 'POST',
-          headers: reqHeaders,
-          // Chrome 131 TLS ciphers
-          ciphers: [
-            'TLS_AES_128_GCM_SHA256',
-            'TLS_AES_256_GCM_SHA384',
-            'TLS_CHACHA20_POLY1305_SHA256',
-          ].join(':'),
-          honorCipherOrder: true,
-        },
-        (res) => {
-          if (res.statusCode !== 200) {
-            let data = '';
-            res.on('data', c => data += c);
-            res.on('end', () => reject(new Error(`Vision HTTP ${res.statusCode}: ${data.slice(0, 300)}`)));
-            return;
-          }
-
-          let raw = '';
-          res.on('data', c => raw += c);
-          res.on('end', () => {
-            let result = '';
-            for (const line of raw.split('\n')) {
-              const t = line.trim();
-              if (!t.startsWith('data:')) continue;
-              const p = t.slice(5).trim();
-              if (p === '[DONE]') break;
-              try {
-                const ev = JSON.parse(p);
-                if (ev.type === 'error') {
-                  reject(new Error(ev.content || 'Vision 错误'));
-                  return;
-                }
-                if (typeof ev.v === 'string') result += ev.v;
-                if (ev.type === 'text') result += (ev.text || ev.content || '');
-              } catch { /* skip */ }
-            }
-            resolve(result || '（无返回内容）');
-          });
-        },
-      );
-      req.on('error', reject);
-      req.write(body);
-      req.end();
+    const resp = await fetch(`${this.baseUrl}/api/v0/chat/completion`, {
+      method: 'POST',
+      headers: reqHeaders,
+      body,
     });
 
-    return result;
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Vision HTTP ${resp.status}: ${text.slice(0, 300)}`);
+    }
+
+    const raw = await resp.text();
+    let result = '';
+    for (const line of raw.split('\n')) {
+      const t = line.trim();
+      if (!t.startsWith('data:')) continue;
+      const p = t.slice(5).trim();
+      if (p === '[DONE]') break;
+      try {
+        const ev = JSON.parse(p);
+        if (ev.type === 'error') throw new Error(ev.content || 'Vision 错误');
+        if (typeof ev.v === 'string') result += ev.v;
+        if (ev.type === 'text') result += (ev.text || ev.content || '');
+      } catch { /* skip */ }
+    }
+
+    return result || '（无返回内容）';
   }
 
   // ========== 完整流水线 ==========
