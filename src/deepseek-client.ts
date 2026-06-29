@@ -142,7 +142,7 @@ export class DeepSeekClient {
   }
 
   // ========== 步骤 2: 等待文件处理完成 ==========
-  async waitForFile(fileId: string, maxWait = 60): Promise<FileInfo> {
+  async waitForFile(fileId: string, maxWait = 120): Promise<FileInfo> {
     for (let i = 0; i < maxWait; i++) {
       const raw = await this.fetch<any>('GET', `/api/v0/file/fetch_files?file_ids=${fileId}`);
       const biz = raw?.data?.biz_data || raw;
@@ -294,7 +294,7 @@ export class DeepSeekClient {
   // ========== 完整流水线 ==========
   async recognizeImage(
     imageBase64: string,
-    prompt: string = '请详细描述这张图片中的内容',
+    prompt: string = '请逐字逐行提取图片中的完整文本内容。如果是JSON/配置文件/代码，请直接输出完整的格式化文本，不要省略任何一行。如果是表格或UI，请逐一列出每个字段和值。',
   ): Promise<string> {
     // 1. 上传
     console.error('[DSClient] 📤 上传图片...');

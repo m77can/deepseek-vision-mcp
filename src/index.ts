@@ -57,8 +57,8 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
             },
             prompt: {
               type: 'string',
-              description: '对图片的提问或指令（可选，默认"请详细描述这张图片中的内容"）',
-              default: '请详细描述这张图片中的内容',
+              description: '对图片的提问或指令。可用追问策略：第一次调用获取概览，如结果不够详细，可第二次调用指定需要深入了解的部分（如"请提取完整的JSON文本"、"详细描述左下角区域"、"逐行读出所有代码"）',
+              default: '请逐字逐行提取图片中的完整文本内容。如果是JSON/配置文件/代码，请直接输出完整的格式化文本，不要省略任何一行。如果是表格或UI，请逐一列出每个字段和值。'
             },
           },
           required: ['image'],
@@ -97,7 +97,7 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
 
           const result = await client.recognizeImage(
             imageBase64,
-            parsed.prompt ?? '请详细描述这张图片中的内容',
+            parsed.prompt ?? '请逐字逐行提取图片中的完整文本内容。如果是JSON/配置文件/代码，请直接输出完整的格式化文本，不要省略任何一行。如果是表格或UI，请逐一列出每个字段和值。',
           );
 
           return { content: [{ type: 'text', text: result }] };
