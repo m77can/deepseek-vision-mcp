@@ -19,4 +19,3 @@ mcp__deepseek-vision__recognize_image({
 - 首次使用自动弹出浏览器登录 DeepSeek
 - Token 自动保存，过期自动刷新
 - 不要尝试让模型直接"看"图片，必须通过此工具
-# test update

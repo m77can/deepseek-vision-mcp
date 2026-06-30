@@ -44,7 +44,7 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
     tools: [
       {
         name: 'recognize_image',
-        description: `使用 DeepSeek 识图模式（Vision）分析图片内容。
+        description: `使用 DeepSeek 识图模式（Vision）分析图片内容，图片路径请传绝对路径。
 首次使用且未设置 DEEPSEEK_USER_TOKEN 时会自动打开浏览器让您登录。
 调用 DeepSeek API 遇到 401 时会自动打开浏览器等待重新登录。
 支持格式：JPEG、PNG、GIF、WebP、BMP`,
@@ -53,7 +53,7 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
           properties: {
             image: {
               type: 'string',
-              description: '图片文件路径（支持本地路径 或 base64 data URI）',
+              description: '图片文件的绝对路径（如 /Users/xxx/image.png，不支持相对路径）或 base64 data URI',
             },
             prompt: {
               type: 'string',
