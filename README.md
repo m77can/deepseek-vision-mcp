@@ -50,7 +50,7 @@ Token 获取方法：`https://chat.deepseek.com` → F12 → Application → Loc
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `image` | string | ✅ | 图片文件路径（也支持 data URI） |
+| `image` | string | ✅ | 绝对路径或 data URI。有引用时先 `ls -al`（如 `.reasonix/attachments/...`、`local://image-xxx.png`），详见 SKILL.md |
 | `prompt` | string | ❌ | 提问（默认：请详细描述这张图片中的内容） |
 
 ```
@@ -70,4 +70,4 @@ src/
 SKILL.md               # Agent Skill 定义
 ```
 
-启动时自动将 `SKILL.md` 安装到 `~/.agent/skills/`。
+启动时自动将 `SKILL.md` 安装到 `~/.agents/skills/deepseek-vision/SKILL.md`。

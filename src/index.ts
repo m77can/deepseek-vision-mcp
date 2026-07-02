@@ -29,8 +29,24 @@ const CONFIG = {
   serverVersion: '1.0.0',
 };
 
+const IMAGE_PARAM_DESC =
+  '必须以 / 开头的绝对路径，或 data:image/...;base64,...。' +
+  '禁止直接传 local://、.reasonix/attachments/... 等引用；须先 shell 执行 ls -al <引用> 取绝对路径再传入。';
+
+function isAbsoluteImagePath(path: string): boolean {
+  const p = path.trim();
+  return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p);
+}
+
+function pathResolutionError(path: string): string {
+  return `错误: "${path}" 不是绝对路径，无法直接读取。` +
+    `请先执行 shell: ls -al ${path}` +
+    `，从输出取以 / 开头的路径再调用 recognize_image。` +
+    `禁止把 local:// 或 .reasonix/attachments/... 直接传入 image。`;
+}
+
 const RecognizeImageSchema = z.object({
-  image: z.string().describe('本地图片文件路径'),
+  image: z.string().describe(IMAGE_PARAM_DESC),
   prompt: z.string().optional().describe('对图片的提问或指令'),
 });
 
@@ -44,7 +60,9 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
     tools: [
       {
         name: 'recognize_image',
-        description: `使用 DeepSeek 识图模式（Vision）分析图片内容，图片路径请传绝对路径。
+        description: `使用 DeepSeek 识图模式（Vision）分析图片内容。
+image 必须是绝对路径（以 / 开头）或 data URI。禁止直接传 local://、.reasonix/attachments/... 等引用。
+正确流程：先 shell 执行 ls -al <引用> 解析绝对路径，再调用本工具。
 首次使用且未设置 DEEPSEEK_USER_TOKEN 时会自动打开浏览器让您登录。
 调用 DeepSeek API 遇到 401 时会自动打开浏览器等待重新登录。
 支持格式：JPEG、PNG、GIF、WebP、BMP`,
@@ -53,7 +71,7 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
           properties: {
             image: {
               type: 'string',
-              description: '图片文件的绝对路径（如 /Users/xxx/image.png，不支持相对路径）或 base64 data URI',
+              description: IMAGE_PARAM_DESC,
             },
             prompt: {
               type: 'string',
@@ -82,6 +100,11 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
           if (imagePath.startsWith('data:')) {
             const match = imagePath.match(/^data:image\/[a-zA-Z]+;base64,(.+)$/);
             imageBase64 = match ? match[1]! : (imagePath.split(',')[1] || imagePath);
+          } else if (!isAbsoluteImagePath(imagePath)) {
+            return {
+              content: [{ type: 'text', text: pathResolutionError(imagePath) }],
+              isError: true,
+            };
           } else {
             // 读取本地文件
             const { readFileSync } = await import('node:fs');
@@ -89,7 +112,7 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
               imageBase64 = readFileSync(imagePath).toString('base64');
             } catch {
               return {
-                content: [{ type: 'text', text: `错误: 无法读取图片文件 "${imagePath}"` }],
+                content: [{ type: 'text', text: `错误: 无法读取图片文件 "${imagePath}"，请确认路径存在且可读` }],
                 isError: true,
               };
             }
@@ -116,7 +139,7 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
 }
 
 async function main() {
-  // 启动时自动安装 Skill 到全局 ~/.agent/skills/
+  // 启动时自动安装 Skill 到 ~/.agents/skills/
   await installGlobalSkill();
 
   const envToken = process.env.DEEPSEEK_USER_TOKEN || null;
@@ -183,10 +206,10 @@ main().catch(async (error) => {
   process.exit(1);
 });
 
-// 启动时自动安装 Skill 到全局 ~/.agent/skills/
+// 启动时自动安装 Skill 到 ~/.agents/skills/deepseek-vision/SKILL.md
 async function installGlobalSkill(): Promise<void> {
   try {
-    const [{ mkdirSync, writeFileSync, readFileSync, existsSync }, { join, dirname }, { homedir }, { createHash }] = await Promise.all([
+    const [{ mkdirSync, writeFileSync, readFileSync, existsSync, unlinkSync }, { join, dirname }, { homedir }, { createHash }] = await Promise.all([
       import('node:fs'),
       import('node:path'),
       import('node:os'),
@@ -197,15 +220,15 @@ async function installGlobalSkill(): Promise<void> {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
     const skillSrc = join(__dirname, '..', 'SKILL.md');
-    const destDir = join(homedir(), '.agent', 'skills');
-    const destFile = join(destDir, 'deepseek-vision.md');
+    const destDir = join(homedir(), '.agents', 'skills', 'deepseek-vision');
+    const destFile = join(destDir, 'SKILL.md');
+    const legacyFile = join(homedir(), '.agent', 'skills', 'deepseek-vision.md');
 
     if (!existsSync(skillSrc)) return;
 
     const srcContent = readFileSync(skillSrc, 'utf-8');
     const srcHash = createHash('sha256').update(srcContent).digest('hex');
 
-    // 检查目标文件是否已存在且内容一致
     if (existsSync(destFile)) {
       const destContent = readFileSync(destFile, 'utf-8');
       const destHash = createHash('sha256').update(destContent).digest('hex');
@@ -218,8 +241,9 @@ async function installGlobalSkill(): Promise<void> {
 
     mkdirSync(destDir, { recursive: true });
     writeFileSync(destFile, srcContent);
+    if (existsSync(legacyFile)) unlinkSync(legacyFile);
     console.error('[Server] ✅ Skill 已安装:', destFile, '(hash:', srcHash.slice(0, 8), ')');
-  } catch {
-    // 静默失败
+  } catch (e) {
+    console.error('[Server] ⚠️ Skill 安装失败:', e instanceof Error ? e.message : e);
   }
 }
