@@ -13,6 +13,26 @@ import {
   type VisionCompletionRequest,
 } from './types.js';
 
+/** DS 业务层鉴权失败（HTTP 可能仍为 200） */
+export function isAuthApiError(code: number | string, msg?: string): boolean {
+  const n = Number(code);
+  if (n === 40003 || n === 401 || n === 403) return true;
+  const m = (msg || '').toLowerCase();
+  return m.includes('authorization failed') || m.includes('invalid token') || m.includes('unauthorized');
+}
+
+function extractAppError(json: Record<string, unknown>): { code: number; msg: string } | null {
+  const from = (obj: Record<string, unknown>): { code: number; msg: string } | null => {
+    if (!('code' in obj)) return null;
+    const code = Number((obj as { code: unknown }).code);
+    if (!Number.isFinite(code) || code === 0 || code === 200) return null;
+    const o = obj as { msg?: string; message?: string };
+    const msg = o.msg || o.message || JSON.stringify(obj).slice(0, 200);
+    return { code, msg };
+  };
+  return from(json) ?? (json.data && typeof json.data === 'object' ? from(json.data as Record<string, unknown>) : null);
+}
+
 export class DeepSeekClient {
   private baseUrl: string;
   private token: string;
@@ -74,13 +94,15 @@ export class DeepSeekClient {
         throw new Error(`DS API ${resp.status}: ${text.slice(0, 300)}`);
       }
       const json = await resp.json() as Record<string, unknown>;
-      // 检查应用层错误
-      if (json && typeof json === 'object' && 'code' in json) {
-        const code = (json as { code: number }).code;
-        if (code && code !== 0 && code !== 200) {
-          const msg = (json as { msg?: string }).msg || JSON.stringify(json).slice(0, 200);
-          throw new Error(`DS API ${code}: ${msg}`);
+      const appErr = extractAppError(json);
+      if (appErr) {
+        const { code, msg } = appErr;
+        if (isAuthApiError(code, msg) && opts.allowRetry !== false && this.loginCallback) {
+          console.error(`[DSClient] 🔑 ${code} (${msg}) 触发自动登录...`);
+          this.token = await this.loginCallback.onLoginRequired();
+          return this.fetch<T>(method, path, { ...opts, allowRetry: false });
         }
+        throw new Error(`DS API ${code}: ${msg}`);
       }
       // 返回原始 JSON
       return json as T;

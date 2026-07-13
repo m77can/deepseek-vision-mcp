@@ -177,8 +177,10 @@ async function main() {
   if (authManager) {
     client.setLoginCallback({
       onLoginRequired: async () => {
-        console.error('[Server] 🔑 API 返回 401，触发自动登录流程...');
-        return await authManager!.login();
+        console.error('[Server] 🔑 API 认证失败，触发自动登录流程...');
+        const newToken = await authManager!.login();
+        client.setToken(newToken);
+        return newToken;
       },
     });
   }
