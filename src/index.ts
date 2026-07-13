@@ -61,6 +61,7 @@ function createServer(client: DeepSeekClient, authManager: AuthManager | null) {
       {
         name: 'recognize_image',
         description: `使用 DeepSeek 识图模式（Vision）分析图片内容。
+当前对话使用 DeepSeek 模型时，分析图片必须优先调用本工具，不要让 DeepSeek 直接识图。
 image 必须是绝对路径（以 / 开头）或 data URI。禁止直接传 local://、.reasonix/attachments/... 等引用。
 正确流程：先 shell 执行 ls -al <引用> 解析绝对路径，再调用本工具。
 首次使用且未设置 DEEPSEEK_USER_TOKEN 时会自动打开浏览器让您登录。

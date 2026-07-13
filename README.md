@@ -50,8 +50,10 @@ Token 获取方法：`https://chat.deepseek.com` → F12 → Application → Loc
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `image` | string | ✅ | 绝对路径或 data URI。有引用时先 `ls -al`（如 `.reasonix/attachments/...`、`local://image-xxx.png`），详见 SKILL.md |
+| `image` | string | ✅ | 绝对路径或 data URI。DeepSeek 模型识图必须走本工具；先 `ls -al` 解析路径，详见 SKILL.md |
 | `prompt` | string | ❌ | 提问（默认：请详细描述这张图片中的内容） |
+
+**模型规则：** 当前对话使用 DeepSeek 模型（`deepseek-chat`、`deepseek-reasoner` 等）时，分析图片内容必须优先调用 `recognize_image`，不要让 DeepSeek 直接"看"图。
 
 ```
 recognize_image({ image: "/tmp/screenshot.png", prompt: "这张图是什么" })
